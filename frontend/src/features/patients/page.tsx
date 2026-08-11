@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -19,6 +19,9 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Eye, Pencil, Search, Trash2, UserPlus } from 'lucide-react'
+import { ApiError } from '@/lib/api-client'
+import type { Patient, PatientInput } from '@/features/patients/api'
+import { useCreatePatient, useDeletePatient, usePatients, useUpdatePatient } from '@/features/patients/hooks'
 
 const patientSchema = z.object({
   nombres: z.string().min(2, 'Ingresa al menos 2 caracteres'),
@@ -33,47 +36,7 @@ const patientSchema = z.object({
 
 type PatientFormValues = z.infer<typeof patientSchema>
 
-type PatientRecord = PatientFormValues & {
-  id: number
-}
-
 type DialogMode = 'create' | 'edit' | 'detail'
-
-const initialPatients: PatientRecord[] = [
-  {
-    id: 1,
-    nombres: 'María Elena',
-    apellidos: 'Fernández Ruiz',
-    dni: '74291836',
-    sexo: 'femenino',
-    fechaNacimiento: '1968-04-12',
-    telefono: '+51 987 654 321',
-    correo: 'maria.fernandez@hospital.com',
-    direccion: 'Av. Los Álamos 154, Lima',
-  },
-  {
-    id: 2,
-    nombres: 'José Luis',
-    apellidos: 'Ramírez Salas',
-    dni: '40192874',
-    sexo: 'masculino',
-    fechaNacimiento: '1979-08-23',
-    telefono: '+51 912 345 678',
-    correo: 'jose.ramirez@hospital.com',
-    direccion: 'Jr. Santa Rosa 223, Callao',
-  },
-  {
-    id: 3,
-    nombres: 'Ana Paula',
-    apellidos: 'Torres Medina',
-    dni: '53817290',
-    sexo: 'femenino',
-    fechaNacimiento: '1987-02-05',
-    telefono: '+51 955 123 987',
-    correo: 'ana.torres@hospital.com',
-    direccion: 'Calle San Martín 311, Arequipa',
-  },
-]
 
 const emptyFormValues: PatientFormValues = {
   nombres: '',
@@ -89,7 +52,7 @@ const emptyFormValues: PatientFormValues = {
 const fieldWrapper = 'space-y-2'
 const errorClass = 'text-xs text-rose-600'
 
-function formatFullName(patient: PatientRecord) {
+function formatFullName(patient: Patient) {
   return `${patient.nombres} ${patient.apellidos}`
 }
 
@@ -99,6 +62,32 @@ function formatDisplayDate(value: string) {
 
 function getStatusTone(index: number) {
   return index % 3 === 0 ? 'destructive' : index % 3 === 1 ? 'secondary' : 'outline'
+}
+
+function toPatientInput(values: PatientFormValues): PatientInput {
+  return {
+    nombres: values.nombres,
+    apellidos: values.apellidos,
+    dni: values.dni,
+    sexo: values.sexo,
+    fecha_nacimiento: values.fechaNacimiento,
+    telefono: values.telefono,
+    correo: values.correo,
+    direccion: values.direccion,
+  }
+}
+
+function toFormValues(patient: Patient): PatientFormValues {
+  return {
+    nombres: patient.nombres,
+    apellidos: patient.apellidos,
+    dni: patient.dni,
+    sexo: patient.sexo,
+    fechaNacimiento: patient.fecha_nacimiento,
+    telefono: patient.telefono,
+    correo: patient.correo,
+    direccion: patient.direccion,
+  }
 }
 
 function PatientFormFields({ controlIdPrefix, register, errors }: { controlIdPrefix: string; register: ReturnType<typeof useForm<PatientFormValues>>['register']; errors: ReturnType<typeof useForm<PatientFormValues>>['formState']['errors'] }) {
@@ -153,90 +142,82 @@ function PatientFormFields({ controlIdPrefix, register, errors }: { controlIdPre
 }
 
 export function PatientsPage() {
-  const [patients, setPatients] = useState<PatientRecord[]>(initialPatients)
   const [searchTerm, setSearchTerm] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dialogMode, setDialogMode] = useState<DialogMode>('create')
-  const [activePatient, setActivePatient] = useState<PatientRecord | null>(null)
+  const [activePatient, setActivePatient] = useState<Patient | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const patientsQuery = usePatients(searchTerm)
+  const createPatientMutation = useCreatePatient()
+  const updatePatientMutation = useUpdatePatient()
+  const deletePatientMutation = useDeletePatient()
 
   const form = useForm<PatientFormValues>({
     resolver: zodResolver(patientSchema),
     defaultValues: emptyFormValues,
   })
 
-  const filteredPatients = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase()
-
-    return patients.filter((patient) => {
-      const fullName = formatFullName(patient).toLowerCase()
-      return fullName.includes(normalizedSearch)
-    })
-  }, [patients, searchTerm])
+  const patients = patientsQuery.data ?? []
+  const isSubmitting = createPatientMutation.isPending || updatePatientMutation.isPending
 
   const openCreateDialog = () => {
     setDialogMode('create')
     setActivePatient(null)
+    setFormError(null)
     form.reset(emptyFormValues)
     setDialogOpen(true)
   }
 
-  const openEditDialog = (patient: PatientRecord) => {
+  const openEditDialog = (patient: Patient) => {
     setDialogMode('edit')
     setActivePatient(patient)
-    form.reset({
-      nombres: patient.nombres,
-      apellidos: patient.apellidos,
-      dni: patient.dni,
-      sexo: patient.sexo,
-      fechaNacimiento: patient.fechaNacimiento,
-      telefono: patient.telefono,
-      correo: patient.correo,
-      direccion: patient.direccion,
-    })
+    setFormError(null)
+    form.reset(toFormValues(patient))
     setDialogOpen(true)
   }
 
-  const openDetailDialog = (patient: PatientRecord) => {
+  const openDetailDialog = (patient: Patient) => {
     setDialogMode('detail')
     setActivePatient(patient)
+    setFormError(null)
     setDialogOpen(true)
   }
 
-  const handleDelete = (patientId: number) => {
-    setPatients((currentPatients) => currentPatients.filter((patient) => patient.id !== patientId))
-    if (activePatient?.id === patientId) {
-      setDialogOpen(false)
-      setActivePatient(null)
-    }
+  const handleDelete = (patientId: string) => {
+    deletePatientMutation.mutate(patientId, {
+      onSuccess: () => {
+        if (activePatient?.id === patientId) {
+          setDialogOpen(false)
+          setActivePatient(null)
+        }
+      },
+    })
   }
 
-  const handleSubmit = (values: PatientFormValues) => {
-    if (dialogMode === 'create') {
-      setPatients((currentPatients) => [
-        ...currentPatients,
-        {
-          id: Date.now(),
-          ...values,
-        },
-      ])
-    }
+  const handleSubmit = async (values: PatientFormValues) => {
+    setFormError(null)
+    const payload = toPatientInput(values)
 
-    if (dialogMode === 'edit' && activePatient) {
-      setPatients((currentPatients) =>
-        currentPatients.map((patient) =>
-          patient.id === activePatient.id
-            ? {
-                ...patient,
-                ...values,
-              }
-            : patient,
-        ),
-      )
-    }
+    try {
+      if (dialogMode === 'create') {
+        await createPatientMutation.mutateAsync(payload)
+      }
 
-    setDialogOpen(false)
-    setActivePatient(null)
-    form.reset(emptyFormValues)
+      if (dialogMode === 'edit' && activePatient) {
+        await updatePatientMutation.mutateAsync({ id: activePatient.id, data: payload })
+      }
+
+      setDialogOpen(false)
+      setActivePatient(null)
+      form.reset(emptyFormValues)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        form.setError('dni', { message: error.message })
+        return
+      }
+      setFormError(error instanceof Error ? error.message : 'Ocurrió un error inesperado.')
+    }
   }
 
   const dialogTitle = dialogMode === 'create' ? 'Nuevo paciente' : dialogMode === 'edit' ? 'Editar paciente' : 'Detalle del paciente'
@@ -245,7 +226,7 @@ export function PatientsPage() {
       ? 'Registra un nuevo paciente dentro del sistema hospitalario.'
       : dialogMode === 'edit'
         ? 'Actualiza la información demográfica y de contacto del paciente.'
-        : 'Consulta el resumen visual del paciente simulado.'
+        : 'Consulta el resumen del paciente.'
 
   return (
     <div className="space-y-6">
@@ -257,8 +238,8 @@ export function PatientsPage() {
         <CardContent className="space-y-6 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm text-slate-500">Tabla moderna simulada con acciones rápidas para visualizar, editar o eliminar pacientes.</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Módulo preparado para conectar backend posteriormente</p>
+              <p className="text-sm text-slate-500">Tabla con acciones rápidas para visualizar, editar o eliminar pacientes.</p>
+              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Datos persistidos en base de datos</p>
             </div>
             <Button type="button" className="rounded-2xl px-5" onClick={openCreateDialog}>
               <UserPlus className="h-4 w-4" />
@@ -272,7 +253,7 @@ export function PatientsPage() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="pl-11"
-              placeholder="Buscar paciente por nombre"
+              placeholder="Buscar por nombre, apellido o DNI"
             />
           </div>
 
@@ -289,8 +270,20 @@ export function PatientsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPatients.length > 0 ? (
-                filteredPatients.map((patient, index) => (
+              {patientsQuery.isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-12 text-center text-slate-500">
+                    Cargando pacientes…
+                  </TableCell>
+                </TableRow>
+              ) : patientsQuery.isError ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-12 text-center text-rose-600">
+                    {patientsQuery.error instanceof Error ? patientsQuery.error.message : 'No se pudo cargar la lista de pacientes.'}
+                  </TableCell>
+                </TableRow>
+              ) : patients.length > 0 ? (
+                patients.map((patient, index) => (
                   <TableRow key={patient.id}>
                     <TableCell>
                       <div className="space-y-1">
@@ -300,7 +293,7 @@ export function PatientsPage() {
                     </TableCell>
                     <TableCell>{patient.dni}</TableCell>
                     <TableCell>{patient.sexo}</TableCell>
-                    <TableCell>{formatDisplayDate(patient.fechaNacimiento)}</TableCell>
+                    <TableCell>{formatDisplayDate(patient.fecha_nacimiento)}</TableCell>
                     <TableCell>{patient.correo}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusTone(index)}>Activo</Badge>
@@ -315,7 +308,13 @@ export function PatientsPage() {
                           <Pencil className="h-4 w-4" />
                           Editar
                         </Button>
-                        <Button type="button" variant="destructive" size="sm" onClick={() => handleDelete(patient.id)}>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={deletePatientMutation.isPending}
+                          onClick={() => handleDelete(patient.id)}
+                        >
                           <Trash2 className="h-4 w-4" />
                           Eliminar
                         </Button>
@@ -350,7 +349,7 @@ export function PatientsPage() {
                   ['Apellidos', activePatient.apellidos],
                   ['DNI', activePatient.dni],
                   ['Sexo', activePatient.sexo],
-                  ['Fecha de nacimiento', formatDisplayDate(activePatient.fechaNacimiento)],
+                  ['Fecha de nacimiento', formatDisplayDate(activePatient.fecha_nacimiento)],
                   ['Teléfono', activePatient.telefono],
                   ['Correo', activePatient.correo],
                   ['Dirección', activePatient.direccion],
@@ -364,6 +363,7 @@ export function PatientsPage() {
             ) : (
               <form id="patient-form" className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
                 <PatientFormFields controlIdPrefix="patient" register={form.register} errors={form.formState.errors} />
+                {formError ? <p className={errorClass}>{formError}</p> : null}
               </form>
             )}
           </DialogBody>
@@ -373,8 +373,8 @@ export function PatientsPage() {
               {dialogMode === 'detail' ? 'Cerrar' : 'Cancelar'}
             </Button>
             {dialogMode !== 'detail' ? (
-              <Button type="submit" form="patient-form">
-                {dialogMode === 'create' ? 'Guardar paciente' : 'Actualizar paciente'}
+              <Button type="submit" form="patient-form" disabled={isSubmitting}>
+                {isSubmitting ? 'Guardando…' : dialogMode === 'create' ? 'Guardar paciente' : 'Actualizar paciente'}
               </Button>
             ) : null}
           </DialogFooter>

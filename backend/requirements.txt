@@ -4,6 +4,17 @@ sqlalchemy==2.0.51
 alembic==1.18.5
 pydantic-settings==2.14.2
 psycopg[binary]==3.3.4
+email-validator==2.2.0
 bcrypt==5.0.0
 python-jose[cryptography]==3.5.0
 python-dotenv==1.2.2
+
+# Dependencias del servicio predictivo (modelo de Mike, backend/model_acv).
+# scikit-learn queda fijado a la versión exacta con la que se serializó
+# modelo_stroke.pkl (confirmada por el warning de deserialización de sklearn;
+# con 1.6.1 el warning desaparece). joblib/pandas no traen esa evidencia directa:
+# quedan fijados a las versiones con las que se verificó end-to-end el pipeline
+# real (preprocesar + predict) en la Fase 3, no a las versiones originales de Mike.
+scikit-learn==1.6.1
+pandas==3.0.5
+joblib==1.5.3
