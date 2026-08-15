@@ -1,15 +1,19 @@
 from collections.abc import Generator
+from functools import lru_cache
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from app.application.interfaces.prediction_service import PredictionService
 from app.application.services.evaluation_service import EvaluationService
 from app.application.services.patient_service import PatientService
+from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.domain.evaluations.repository import EvaluationRepository
 from app.domain.patients.repository import PatientRepository
 from app.infrastructure.persistence.repositories.evaluation_repository import SqlAlchemyEvaluationRepository
 from app.infrastructure.persistence.repositories.patient_repository import SqlAlchemyPatientRepository
+from app.infrastructure.prediction.stroke_prediction_service import StrokePredictionService
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -37,3 +41,15 @@ def get_evaluation_service(
     patient_repository: PatientRepository = Depends(get_patient_repository),
 ) -> EvaluationService:
     return EvaluationService(repository, patient_repository)
+
+
+@lru_cache
+def _get_stroke_prediction_service() -> StrokePredictionService:
+    # Cacheado a nivel de proceso: cargar el .pkl (joblib + scikit-learn) es costoso,
+    # no debe repetirse en cada request.
+    settings = get_settings()
+    return StrokePredictionService(settings.stroke_model_pipeline_path)
+
+
+def get_prediction_service() -> PredictionService:
+    return _get_stroke_prediction_service()
