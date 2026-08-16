@@ -8,6 +8,14 @@ from app.domain.evaluations.entities import EvaluationGender, EverMarried, Resid
 
 @dataclass(frozen=True, slots=True)
 class EvaluationCreateDTO:
+    """Datos crudos capturados por el formulario de evaluación.
+
+    No incluye bmi (el servicio lo calcula de forma determinista a partir de
+    weight/height — ver app/domain/evaluations/bmi.py) ni prediction_class/
+    prediction_probability/model_name (el servicio los obtiene invocando al
+    PredictionService real; nunca deben venir precalculados desde el llamador).
+    """
+
     patient_id: UUID
     gender: EvaluationGender
     age: float
@@ -19,12 +27,4 @@ class EvaluationCreateDTO:
     avg_glucose_level: float
     weight: float
     height: float
-    bmi: float
     smoking_status: SmokingStatus
-    # Resultado de la predicción: en esta fase no existe todavía un servicio de
-    # predicción real conectado (eso es la Fase 4). El contrato ya exige estos
-    # campos porque una Evaluation representa un evento histórico que siempre
-    # incluye el resultado de una predicción ya calculada.
-    prediction_class: int
-    prediction_probability: float | None
-    model_name: str

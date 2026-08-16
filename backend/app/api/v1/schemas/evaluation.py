@@ -22,18 +22,18 @@ class EvaluationBase(BaseModel):
     # de descubrimiento del modelo).
     weight: float = Field(gt=0)
     height: float = Field(gt=0)
-    bmi: float = Field(gt=0)
     smoking_status: SmokingStatus
 
 
 class EvaluationCreate(EvaluationBase):
-    """Payload de entrada. En esta fase no existe todavía un servicio de predicción
-    conectado (Fase 4), así que estos campos de resultado deben venir ya calculados
-    por quien construya la evaluación (por ahora, nadie —no hay endpoint expuesto)."""
+    """Payload de entrada real (Fase 5).
 
-    prediction_class: int = Field(ge=0, le=1)
-    prediction_probability: float | None = Field(default=None, ge=0, le=1)
-    model_name: str
+    A propósito NO incluye bmi ni prediction_class/prediction_probability/model_name:
+    - bmi lo calcula el backend a partir de weight/height (fuente única de verdad,
+      ver app/domain/evaluations/bmi.py) — un bmi enviado por el cliente se ignoraría.
+    - la predicción la calcula el modelo real (.pkl) a través de PredictionService;
+      el cliente nunca puede fijar el resultado de la predicción.
+    """
 
 
 class EvaluationResponse(EvaluationBase):
@@ -41,6 +41,7 @@ class EvaluationResponse(EvaluationBase):
 
     id: UUID
     patient_id: UUID
+    bmi: float
     prediction_class: int
     prediction_probability: float | None
     model_name: str

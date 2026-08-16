@@ -11,9 +11,18 @@ export class ApiError extends Error {
 
 async function parseErrorMessage(response: Response): Promise<string> {
   try {
-    const body = (await response.json()) as { detail?: string }
+    const body = (await response.json()) as { detail?: unknown }
     if (typeof body.detail === 'string') {
       return body.detail
+    }
+    // FastAPI devuelve errores de validación (422) como detail: [{ msg, loc, ... }, ...]
+    if (Array.isArray(body.detail)) {
+      const messages = body.detail
+        .map((item) => (item && typeof item === 'object' && 'msg' in item ? String((item as { msg: unknown }).msg) : null))
+        .filter((msg): msg is string => Boolean(msg))
+      if (messages.length > 0) {
+        return messages.join(' | ')
+      }
     }
   } catch {
     // response had no JSON body

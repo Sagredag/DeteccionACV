@@ -36,13 +36,6 @@ def get_evaluation_repository(db: Session = Depends(get_db)) -> EvaluationReposi
     return SqlAlchemyEvaluationRepository(db)
 
 
-def get_evaluation_service(
-    repository: EvaluationRepository = Depends(get_evaluation_repository),
-    patient_repository: PatientRepository = Depends(get_patient_repository),
-) -> EvaluationService:
-    return EvaluationService(repository, patient_repository)
-
-
 @lru_cache
 def _get_stroke_prediction_service() -> StrokePredictionService:
     # Cacheado a nivel de proceso: cargar el .pkl (joblib + scikit-learn) es costoso,
@@ -53,3 +46,11 @@ def _get_stroke_prediction_service() -> StrokePredictionService:
 
 def get_prediction_service() -> PredictionService:
     return _get_stroke_prediction_service()
+
+
+def get_evaluation_service(
+    repository: EvaluationRepository = Depends(get_evaluation_repository),
+    patient_repository: PatientRepository = Depends(get_patient_repository),
+    prediction_service: PredictionService = Depends(get_prediction_service),
+) -> EvaluationService:
+    return EvaluationService(repository, patient_repository, prediction_service)
