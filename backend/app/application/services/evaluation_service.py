@@ -90,3 +90,6 @@ class EvaluationService:
         if self._patient_repository.get_by_id(patient_id) is None:
             raise PatientNotFoundError(patient_id)
         return self._repository.list_by_patient(patient_id)
+
+    def list_evaluations(self, limit: int = 20, offset: int = 0) -> list[Evaluation]:
+        return self._repository.list_all(limit=limit, offset=offset)

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.v1.schemas.patient import PatientResponse
 from app.domain.evaluations.entities import EvaluationGender, EverMarried, ResidenceType, SmokingStatus, WorkType
 
 
@@ -46,3 +47,15 @@ class EvaluationResponse(EvaluationBase):
     prediction_probability: float | None
     model_name: str
     created_at: datetime
+
+
+class EvaluationDetailResponse(EvaluationResponse):
+    """Fase 6: historial y detalle.
+
+    Extiende EvaluationResponse (Fase 5, sin modificar) agregando el paciente
+    asociado. El endpoint de creación de evaluaciones sigue devolviendo
+    EvaluationResponse tal cual; este schema solo lo usan los endpoints de
+    consulta (GET /evaluations, GET /evaluations/{id}, GET /patients/{id}/evaluations).
+    """
+
+    patient: PatientResponse

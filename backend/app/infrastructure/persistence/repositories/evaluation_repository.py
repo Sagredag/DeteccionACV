@@ -47,6 +47,11 @@ class SqlAlchemyEvaluationRepository(EvaluationRepository):
         rows = self._db.execute(query).scalars().all()
         return [self._to_entity(row) for row in rows]
 
+    def list_all(self, limit: int, offset: int) -> list[Evaluation]:
+        query = select(EvaluationModel).order_by(EvaluationModel.created_at.desc()).limit(limit).offset(offset)
+        rows = self._db.execute(query).scalars().all()
+        return [self._to_entity(row) for row in rows]
+
     @staticmethod
     def _to_entity(model: EvaluationModel) -> Evaluation:
         return Evaluation(

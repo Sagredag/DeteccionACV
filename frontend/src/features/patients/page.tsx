@@ -22,6 +22,7 @@ import { Eye, Pencil, Search, Trash2, UserPlus } from 'lucide-react'
 import { ApiError } from '@/lib/api-client'
 import type { Patient, PatientInput } from '@/features/patients/api'
 import { useCreatePatient, useDeletePatient, usePatients, useUpdatePatient } from '@/features/patients/hooks'
+import { usePatientEvaluations } from '@/features/history/hooks'
 
 const patientSchema = z.object({
   nombres: z.string().min(2, 'Ingresa al menos 2 caracteres'),
@@ -58,6 +59,51 @@ function formatFullName(patient: Patient) {
 
 function formatDisplayDate(value: string) {
   return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium' }).format(new Date(`${value}T00:00:00`))
+}
+
+function formatDisplayDateTime(value: string) {
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function PatientEvaluationsList({ patientId }: { patientId: string }) {
+  const evaluationsQuery = usePatientEvaluations(patientId)
+
+  if (evaluationsQuery.isLoading) {
+    return <p className="text-sm text-slate-500">Cargando evaluaciones…</p>
+  }
+
+  if (evaluationsQuery.isError) {
+    const error = evaluationsQuery.error
+    const message = error instanceof ApiError ? `Error del servidor: ${error.message}` : 'No se pudo conectar con el servidor. Verifica tu conexión.'
+    return <p className="text-sm text-rose-600">{message}</p>
+  }
+
+  const evaluations = evaluationsQuery.data ?? []
+
+  if (evaluations.length === 0) {
+    return <p className="text-sm text-slate-500">Este paciente aún no tiene evaluaciones registradas.</p>
+  }
+
+  return (
+    <div className="space-y-2">
+      {evaluations.map((evaluation) => (
+        <div key={evaluation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div>
+            <p className="text-sm font-medium text-slate-900">{formatDisplayDateTime(evaluation.created_at)}</p>
+            <p className="text-xs text-slate-500">Modelo: {evaluation.model_name}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold text-slate-900">
+              {evaluation.prediction_probability !== null ? `${(evaluation.prediction_probability * 100).toFixed(2)}%` : 'N/D'}
+            </p>
+            <Badge variant={evaluation.prediction_class === 1 ? 'destructive' : 'outline'}>
+              {evaluation.prediction_class === 1 ? 'Riesgo de ACV' : 'Sin riesgo de ACV'}
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function getStatusTone(index: number) {
@@ -335,7 +381,7 @@ export function PatientsPage() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{dialogTitle}</DialogTitle>
             <DialogDescription>{dialogDescription}</DialogDescription>
@@ -359,6 +405,10 @@ export function PatientsPage() {
                     <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
                   </div>
                 ))}
+                <div className="md:col-span-2 space-y-3 pt-2">
+                  <h4 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Evaluaciones registradas</h4>
+                  <PatientEvaluationsList patientId={activePatient.id} />
+                </div>
               </div>
             ) : (
               <form id="patient-form" className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>

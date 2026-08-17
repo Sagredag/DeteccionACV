@@ -18,3 +18,7 @@ class EvaluationRepository(ABC):
     @abstractmethod
     def list_by_patient(self, patient_id: UUID) -> list[Evaluation]:
         raise NotImplementedError
+
+    @abstractmethod
+    def list_all(self, limit: int, offset: int) -> list[Evaluation]:
+        raise NotImplementedError
